@@ -1,6 +1,5 @@
 <?php
 $response = '';
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Replace this with your actual Discord webhook URL
     $discord_webhook_url = file_exists('config.local.php')
@@ -40,11 +39,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // region Get image
     $image_match = '';
-    $image_url = preg_match(
+    preg_match(
         '/.*(https:\/\/m.media-amazon.com\/images\/I\/([^.]*?)\.).*/',
         $og_items['image'],
         $image_match
     );
+    $image_url = $image_match[1]. '._SL500_.jpg';
     // endregion
 
     // region Get author
@@ -73,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Sample data (replace this with actual scraped data)
     $book_title = $og_items['title'];
-    $cover_art = $image_match[1]. '._SL500_.jpg';
     $description = trim(str_replace('Check out this great listen on Audible.com.', '', $og_items['description']));
     $book_url = $og_items['url'];
     $book_url_parts = explode('/', $book_url);
@@ -83,50 +82,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sample_match = [];
     preg_match('/.*id="sample-player-'.$book_id.'".*?data-mp3="(.*?)".*/', $htmlLine, $sample_match);
     $sample_url = $sample_match[1];
-    $attach_sample = false;
-    $attachment = '';
     $boundary = bin2hex(random_bytes(15));
     $file_contents = '';
+
+    $attachmentsItems = [];
+    $attachmentsData = [];
+    var_dump($image_url, $sample_url);
+    if (filter_var($image_url,FILTER_VALIDATE_URL)) {
+        echo "<p>Attaching image...</p>";
+        $attachment = attach_file($image_url, $boundary, 'files[0]', 'image.jpg', 'image/jpeg');
+        if(!empty($attachment)) {
+            $attachmentsData[] = $attachment;
+            $attachmentsItems[] = [
+                'id'=>0,
+                'description' => 'Cover image of the book',
+                'filename' => build_filename($book_title, "cover.jpg")
+            ];
+        }
+    }
+
     if (filter_var($sample_url, FILTER_VALIDATE_URL)) {
-        $file_contents = file_get_contents($sample_url);
-        if($file_contents) {
-            $attach_sample = true;
-            $attachment = "\r\n--$boundary\r\nContent-Disposition: form-data; name=files[0]; filename=sample.mp3\r\nContent-Type: audio/mpeg\r\n\r\n$file_contents";
+        echo "<p>Attaching sound...</p>";
+        $attachment = attach_file($sample_url, $boundary, 'files[1]', 'sample.mp3', 'audio/mpeg');
+        if(!empty($attachment)) {
+            $attachmentsData[] = $attachment;
+            $attachmentsItems[] = [
+                'id'=>1,
+                'description' => 'Sample audio clip of the book',
+                'filename' => build_filename($book_title, "sample.mp3")
+            ];
         }
     }
     // endregion
 
     // Prepare the data to be sent to Discord
     $description_items = [
-        "# [$book_title]($book_url)",
-        "**Author**: $author",
-        "**Narrated by**: $narrator",
-        "**Series**: $series",
-        "**Length**: $runtime",
+        "> **Author**: $author",
+        "> **Narrated by**: $narrator",
+    ];
+    if(!empty($series)) $description_items[] = "> **Series**: $series";
+    if(!empty($runtime)) $description_items[] = "> **Length**: $runtime";
+    $description_items[] = "> **Link**: [Get the book](<$book_url>)";
+    if(!empty($description)) $description_items[] = "\n> **Description**: $description";
 
-    ];
     $discord_data = [
-        'content' => implode("\n", $description_items),
-        'thread_name' => $book_title,
-        'embeds' => [
-            [
-                'description' => "\n**Description**: $description",
-                'thumbnail' => [
-                    'url' => $cover_art,
-                ],
-            ],
-        ]
+        'content' => implode("\n", $description_items)."\n\n",
+        'thread_name' => $book_title
     ];
-    if ($attach_sample) {
-        $discord_data['attachments'] = [[
-            'id'=>0,
-            'description' => 'Sample audio clip of the book',
-            'filename' => build_filename($book_title)
-        ]];
+    if(count($attachmentsItems) > 0) {
+        $discord_data['attachments'] = $attachmentsItems;
     }
 
     // Send data to Discord webhook
-    $payload = "--$boundary\r\nContent-Disposition: form-data; name=payload_json\r\nContent-Type: application/json\r\n\r\n".json_encode($discord_data).$attachment."\r\n--$boundary--\r\n";
+    $payload = build_payload($boundary, $discord_data, $attachmentsData);
     $ch = curl_init($discord_webhook_url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: multipart/form-data; boundary='.$boundary.'; Content-Length: '.strlen($payload).';']);
     curl_setopt($ch, CURLOPT_POST, 1);
@@ -140,7 +148,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-function build_filename(string $string): string
+function build_payload(string $boundary, array $jsonData, array $attachmentsData): string
+{
+    $payload = attach_file($jsonData, $boundary, 'payload_json', 'payload.json', 'application/json');
+    $payload .= implode('', $attachmentsData);
+    $payload .= "--$boundary--\r\n";
+    return $payload;
+}
+
+function attach_file(string|array $filePathOrJSON, string $boundary, string $name, string $fileName, string $contentType): string
+{
+    if(is_array($filePathOrJSON)) {
+        $data = json_encode($filePathOrJSON);
+        return "--$boundary\r\nContent-Disposition: form-data; name=$name\r\nContent-Type: $contentType\r\n\r\n$data\r\n";
+    } else {
+        $data = file_get_contents($filePathOrJSON);
+        return "--$boundary\r\nContent-Disposition: form-data; name=$name; filename=$fileName\r\nContent-Type: $contentType\r\n\r\n$data\r\n";
+    }
+}
+
+function build_filename(string $string, string $extension): string
 {
     $string = preg_replace('/[^a-z0-9\s\-]/i', '', $string);
     $string = preg_replace('/\s/', '_', $string);
@@ -149,7 +176,7 @@ function build_filename(string $string): string
     if(strlen($string) > 60) {
         $string = substr($string, 0, 60);
     }
-    return "{$string}_sample.mp3";
+    return "{$string}_$extension";
 }
 ?>
 <!DOCTYPE html>
