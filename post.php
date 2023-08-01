@@ -60,14 +60,20 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
 
     // region Get narrator
     $narrator_match = [];
-    preg_match('/.*narratorLabel".*?Narrated by:.*?>(.*?)<\/a>.*/', $htmlLine, $narrator_match);
-    $narrator = trim($narrator_match[1]);
+    preg_match('/.*narratorLabel".*?>(.*?)<\/li>.*/', $htmlLine, $narrator_match);
+    $narrator = count($narrator_match) == 2
+        ? trim(strip_tags(str_replace('Narrated by:', '', $narrator_match[1])))
+        : '';
+    $narrator = preg_replace('/\s\s+/', ' ', $narrator);
     // endregion
 
     // region Get series
     $series_match = [];
-    preg_match('/.*seriesLabel".*?Series:.*?>(.*?)<\/a>(.*?)<\/li>.*/', $htmlLine, $series_match);
-    $series = count($series_match) == 3 ? trim($series_match[1]).trim($series_match[2]) : '';
+    preg_match('/.*seriesLabel".*?>(.*?)<\/li>.*/', $htmlLine, $series_match);
+    $series = count($series_match) == 2
+        ? trim(strip_tags(str_replace('Series:', '', $series_match[1])))
+        : '';
+    $series = preg_replace('/\s\s+/', ' ', $series);
     // endregion
 
     // region Get length

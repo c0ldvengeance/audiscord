@@ -59,7 +59,7 @@
         const linksResponse = await fetch('links.txt')
         if(linksResponse.ok) {
             const links = await linksResponse.text()
-            for(const link of links) {
+            for(const link of links.split('\n')) {
                 const options = {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
