@@ -3,7 +3,11 @@ $response = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Replace this with your actual Discord webhook URL
-    $discord_webhook_url = include 'config.local.php' ?? include 'config.php' ?? '';
+    $discord_webhook_url = file_exists('config.local.php')
+        ? include 'config.local.php'
+        : (file_exists('config.php')
+            ? include 'config.php'
+            : '');
     if(empty($discord_webhook_url)) die('Set your Discord webhook URL in config.php or config.local.php');
 
     // Get the Audible URL from the form
@@ -103,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     $discord_data = [
         'content' => implode("\n", $description_items),
+        'thread_name' => $book_title,
         'embeds' => [
             [
                 'description' => "\n**Description**: $description",
