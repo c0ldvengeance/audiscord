@@ -1,7 +1,7 @@
 <?php
 $response = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Replace this with your actual Discord webhook URL
+    // Load Discord webhook
     $discord_webhook_url = file_exists('config.local.php')
         ? include 'config.local.php'
         : (file_exists('config.php')
@@ -14,13 +14,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $audible_url_arr = explode('?', $audible_url);
     $audible_url = $audible_url_arr[0];
 
-    // Validate the URL (optional)
-    if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
-        die('Invalid URL');
+    // Should we repost?
+    $repost = boolval($_POST['repost'] ?? false);
+
+    if($repost) { // Post all old links
+        $linksStr = file_get_contents('links.txt');
+        if($linksStr) {
+            $links = explode("\n", $linksStr);
+            foreach($links as $link) {
+                scrapeAndPost($link, $discord_webhook_url, true);
+            }
+        }
+    } else { // Post single incoming link
+        if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
+            die('Invalid URL');
+        } else {
+            scrapeAndPost($audible_url, $discord_webhook_url, false);
+        }
     }
 
-    // You should implement scraping the Audible website here, but I'll skip it to respect Audible's policies.
+}
 
+function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $isRepost) {
     // region Get page
     $html = file_get_contents($audible_url);
     $htmlLine = str_replace("\n", '', $html);
@@ -87,9 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $attachmentsItems = [];
     $attachmentsData = [];
-    var_dump($image_url, $sample_url);
     if (filter_var($image_url,FILTER_VALIDATE_URL)) {
-        echo "<p>Attaching image...</p>";
         $attachment = attach_file($image_url, $boundary, 'files[0]', 'image.jpg', 'image/jpeg');
         if(!empty($attachment)) {
             $attachmentsData[] = $attachment;
@@ -102,7 +115,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (filter_var($sample_url, FILTER_VALIDATE_URL)) {
-        echo "<p>Attaching sound...</p>";
         $attachment = attach_file($sample_url, $boundary, 'files[1]', 'sample.mp3', 'audio/mpeg');
         if(!empty($attachment)) {
             $attachmentsData[] = $attachment;
@@ -127,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $discord_data = [
         'content' => implode("\n", $description_items)."\n\n",
-        'thread_name' => $book_title
+        'thread_name' => !empty($series) ? "$series — $book_title" : $book_title
     ];
     if(count($attachmentsItems) > 0) {
         $discord_data['attachments'] = $attachmentsItems;
@@ -143,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $response = curl_exec($ch);
     curl_close($ch);
 
-    if($response !== false) {
+    if($response !== false && !$isRepost) {
         file_put_contents('links.txt', $audible_url."\n", FILE_APPEND);
     }
 }
@@ -191,10 +203,18 @@ function build_filename(string $string, string $extension): string
 </head>
 <body>
 <h1>Enter Audible Book URL</h1>
+<p>
 <form action="" method="post">
     <input type="text" name="audible_url" placeholder="Enter Audible URL" />
     <input type="submit" value="Scrape and Send to Discord" />
 </form>
+</p>
+<p>
+<form action="" method="post">
+    <input type="hidden" name="repost" value="1" />
+    <input type="submit" value="Repost everything" />
+</form>
+</p>
 <p><strong>Response</strong>: <?=$response?></p>
 </body>
 </html>
