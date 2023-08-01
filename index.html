@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Audible Poster</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<h1>Enter Audible Book URL</h1>
+<p>
+    <input id="url" type="text" name="audible_url" placeholder="Enter Audible URL" />
+    <input id="submit" type="submit" value="Scrape and Send to Discord"/>
+</p>
+<p>
+    <input id="repost" type="submit" value="Repost everything" />
+</p>
+<p><strong>Response</strong></p>
+<div id="response"></div>
+</body>
+<script>
+    const submitInput = document.getElementById('submit')
+    const repostInput = document.getElementById('repost')
+    const responseDiv = document.getElementById('response')
+    submitInput.onclick = async (e) => {
+        const urlInput = document.getElementById('url')
+        const url = urlInput.value ?? ''
+        if(url.length === 0) {
+            responseDiv.innerHTML = 'No URL provided'
+            responseDiv.classList.add('error')
+            return
+        }
+        const data = new URLSearchParams({audible_url: url})
+        console.log(data)
+        const options = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: data
+        }
+        const response = await fetch('post.php', options)
+        const json = await response.json()
+        responseDiv.innerHTML = json?.message ?? JSON.stringify(json)
+
+        if(response.ok) {
+            responseDiv.classList.add('success')
+        } else {
+            responseDiv.classList.add('error')
+        }
+    }
+    repostInput.onclick = async (e) => {
+        const linksResponse = await fetch('links.txt')
+        if(linksResponse.ok) {
+            const links = await linksResponse.text()
+            for(const link of links) {
+                const options = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({audible_url: link, repost: '1'})
+                }
+                const response = await fetch('post.php', options)
+                const json = await response.json()
+                responseDiv.innerHTML += '<p>'+(json?.message ?? `OK: ${link}`)+'</p>'
+            }
+        } else {
+            responseDiv.innerHTML = 'No links found'
+            responseDiv.classList.add('error')
+        }
+    }
+</script>
+</html>

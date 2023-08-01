@@ -1,5 +1,7 @@
 <?php
 $response = '';
+header('Content-Type: application/json');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Load Discord webhook
     $discord_webhook_url = file_exists('config.local.php')
@@ -7,32 +9,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         : (file_exists('config.php')
             ? include 'config.php'
             : '');
-    if(empty($discord_webhook_url)) die('Set your Discord webhook URL in config.php or config.local.php');
+    if(empty($discord_webhook_url)) die(json_encode(['message'=>'Set your Discord webhook URL in config.php or config.local.php']));
 
     // Get the Audible URL from the form
-    $audible_url = $_POST['audible_url'] ?? '';
+    $audible_url = urldecode($_POST['audible_url'] ?? '');
     $audible_url_arr = explode('?', $audible_url);
     $audible_url = $audible_url_arr[0];
 
     // Should we repost?
     $repost = boolval($_POST['repost'] ?? false);
-
-    if($repost) { // Post all old links
-        $linksStr = file_get_contents('links.txt');
-        if($linksStr) {
-            $links = explode("\n", $linksStr);
-            foreach($links as $link) {
-                scrapeAndPost($link, $discord_webhook_url, true);
-            }
-        }
-    } else { // Post single incoming link
-        if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
-            die('Invalid URL');
-        } else {
-            scrapeAndPost($audible_url, $discord_webhook_url, false);
-        }
+    if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
+        die(json_encode(['message'=>"Invalid URL: $audible_url"]));
+    } else {
+        echo scrapeAndPost($audible_url, $discord_webhook_url, $repost);
     }
-
 }
 
 function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $isRepost) {
@@ -158,6 +148,7 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     if($response !== false && !$isRepost) {
         file_put_contents('links.txt', $audible_url."\n", FILE_APPEND);
     }
+    return $response;
 }
 
 function build_payload(string $boundary, array $jsonData, array $attachmentsData): string
@@ -190,31 +181,3 @@ function build_filename(string $string, string $extension): string
     }
     return "{$string}_$extension";
 }
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Audible Book Data to Discord</title>
-    <style>
-        body {
-            font-family: sans-serif;
-        }
-    </style>
-</head>
-<body>
-<h1>Enter Audible Book URL</h1>
-<p>
-<form action="" method="post">
-    <input type="text" name="audible_url" placeholder="Enter Audible URL" />
-    <input type="submit" value="Scrape and Send to Discord" />
-</form>
-</p>
-<p>
-<form action="" method="post">
-    <input type="hidden" name="repost" value="1" />
-    <input type="submit" value="Repost everything" />
-</form>
-</p>
-<p><strong>Response</strong>: <?=$response?></p>
-</body>
-</html>
