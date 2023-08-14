@@ -38,7 +38,7 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     for($i = 0; $i < count($og_matches[0]); $i++) {
         $k = $og_matches[1][$i];
         $v = $og_matches[2][$i];
-        $og_items[$k] = $v;
+        $og_items[$k] = html_entity_decode($v);
     }
     // endregion
 
@@ -55,7 +55,7 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     // region Get author
     $author_match = [];
     preg_match('/.*authorLabel".*?By:.*?>(.*?)<\/a>.*/', $htmlLine, $author_match);
-    $author = trim($author_match[1]);
+    $author = html_entity_decode(trim($author_match[1]));
     // endregion
 
     // region Get narrator
@@ -64,7 +64,7 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     $narrator = count($narrator_match) == 2
         ? trim(strip_tags(str_replace('Narrated by:', '', $narrator_match[1])))
         : '';
-    $narrator = preg_replace('/\s\s+/', ' ', $narrator);
+    $narrator = html_entity_decode(preg_replace('/\s\s+/', ' ', $narrator));
     // endregion
 
     // region Get series
@@ -73,13 +73,13 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     $series = count($series_match) == 2
         ? trim(strip_tags(str_replace('Series:', '', $series_match[1])))
         : '';
-    $series = preg_replace('/\s\s+/', ' ', $series);
+    $series = html_entity_decode(preg_replace('/\s\s+/', ' ', $series));
     // endregion
 
     // region Get length
     $runtime_match = [];
     preg_match('/.*runtimeLabel".*?Length:(.*?)<\/li>.*/', $htmlLine, $runtime_match);
-    $runtime = trim($runtime_match[1]);
+    $runtime = html_entity_decode(trim($runtime_match[1]));
     // endregion
 
     // Sample data (replace this with actual scraped data)
