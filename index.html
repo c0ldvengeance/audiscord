@@ -2,9 +2,25 @@
 <html lang="en">
 <head>
     <title>Audible Poster</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
-            font-family: sans-serif;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f2f2f2;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .success {
             color: green;
@@ -12,34 +28,192 @@
         .error {
             color: red;
         }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="date"],
+        input[type="password"],
+        input[id="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Add this to include padding in the element's total width */
+        }
+        input[id="repost"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Add this to include padding in the element's total width */
+        }
+        input[id="repostdelay"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Add this to include padding in the element's total width */
+        }
+        input[type="date"]::-webkit-inner-spin-button,
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            display: none;
+            -webkit-appearance: none;
+        }
+        input[type="submit"] {
+            background-color: #007BFF;
+            color: #ffffff;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .left-text {
+            text-align: left; /* Center the text within the <p> element */
+        }
+        .right-text {
+            text-align: right; /* Center the text within the <p> element */
+        }
+        p {
+            text-align: center;
+        }
+        /* Mobile responsiveness */
+        @media screen and (max-width: 980px) {
+          .container {
+            width: 80%;
+            max-width: none;
+          }
+        }
     </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script>
+        $(function() {
+            $( "#finished_date" ).datepicker({ dateFormat: "yy/mm/dd" });
+        });
+    </script>
 </head>
 <body>
-<h1>Enter Audible Book URL</h1>
+<h1>Audible Book Data to Discord.</h1>
 <p>
+    <div class="container">
+    <label for="audible_url">Audible URL:</label>
     <input id="url" type="text" name="audible_url" placeholder="Enter Audible URL" />
-    <input id="submit" type="submit" value="Scrape and Send to Discord"/>
+    <label for="finished_date">Finished Date:</label>
+    <input id="finished_date" type="text" name="finished_date" id="finished_date" autocomplete="off" placeholder="Leave Empty for Today" />
+    <label for="book_rating">Rating:</label>
+    <input id="book_rating" type="text" name="book_rating" id="book_rating" autocomplete="off" placeholder="Out of 10" />
+    <label for="password">Password:</label>
+    <input id="password" type="password" name="password" id="password" />
+    <input id="submit" type="submit" value="Scrape and Send to Discord" />
 </p>
-<p>
-    <input id="repost" type="submit" value="Repost everything" />
+<p class="left-text">
+    <label class="checkbox-label" title="a 7min throttle reposts means you see the posters name and icon on each message">
+        Throttle Reposts (7min)<input id="repost_checkbox" type="checkbox" onchange="toggleRepostFields()" />
+    </label>
 </p>
+<p class="left-text">
+    <input id="repost" type="submit" value="Repost Everything" />
+</p>
+<p class="right-text">
+    <input id="repostdelay" type="submit" value="Repost Everything Throttled" style="display: none;" />
+</p>
+</div>
 <p><strong>Response</strong></p>
 <div id="response"></div>
 </body>
-<script>
+<script>   
+
+    function toggleRepostFields() {
+        var repostCheckbox = document.getElementById("repost_checkbox");
+        var repostField = document.getElementById("repost");
+        var repostdelayField = document.getElementById("repostdelay");
+        
+        if (repostCheckbox.checked) {
+            repostField.style.display = "none";
+            repostdelayField.style.display = "block";
+        } else {
+            repostField.style.display = "block";
+            repostdelayField.style.display = "none";
+        }
+    }
+
+
     const submitInput = document.getElementById('submit')
     const repostInput = document.getElementById('repost')
+    const repostdelayInput = document.getElementById('repostdelay')
     const responseDiv = document.getElementById('response')
     submitInput.onclick = async (e) => {
+
+        submitInput.value = 'Scrape and Send to Discord - Submitting';
+        submitInput.style.backgroundColor = 'orange';
+
+        submitInput.disabled = true;
+        repostInput.disabled = true;
+        repostdelayInput.disabled = true;
+
+
         const urlInput = document.getElementById('url')
+        const finished_dateInput = document.getElementById('finished_date')
+        const book_ratingInput = document.getElementById('book_rating')
+        const passwordInput = document.getElementById('password')
+
         const url = urlInput.value ?? ''
+        const finished_date = finished_dateInput.value ?? ''
+        const book_rating = book_ratingInput.value ?? ''
+        const password = passwordInput.value ?? ''
+
+        console.log(`URL: ${url}, date_finished: ${finished_date}, book_rating: ${book_rating}`);
+
         if(url.length === 0) {
-            responseDiv.innerHTML = 'No URL provided'
-            responseDiv.classList.add('error')
+            responseDiv.innerHTML = '<p>No URL provided</p>'
+            responseDiv.classList.value = 'error';
+            submitInput.value = 'Scrape and Send to Discord - Error';
+            submitInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
             return
         }
-        const data = new URLSearchParams({audible_url: url})
-        console.log(data)
+
+        if(book_rating.length === 0) {
+            responseDiv.innerHTML = '<p>Book Rating Required</p>'
+            responseDiv.classList.value = 'error';
+            submitInput.value = 'Scrape and Send to Discord - Error';
+            submitInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
+            return
+        }
+
+        if(password.length === 0) {
+            responseDiv.innerHTML = '<p>Password Required</p>'
+            responseDiv.classList.value = 'error';
+            submitInput.value = 'Scrape and Send to Discord - Error';
+            submitInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
+            return
+        }
+              
+        const data = new URLSearchParams({
+            audible_url: url,
+            finished_date: finished_date,
+            book_rating: book_rating,
+            password: password
+        });
+        
         const options = {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -49,30 +223,226 @@
         const json = await response.json()
         responseDiv.innerHTML = json?.message ?? JSON.stringify(json)
 
+        if(responseDiv.innerHTML === "<p>Password Incorrect</p>") {
+                responseDiv.classList.value = 'error';
+                submitInput.value = 'Scrape and Send to Discord - Error';
+                submitInput.style.backgroundColor = 'red';
+                submitInput.disabled = false;
+                repostInput.disabled = false;
+                repostdelayInput.disabled = false;
+                return
+        }
+
         if(response.ok) {
-            responseDiv.classList.add('success')
+            responseDiv.classList.value = 'success';
+            submitInput.value = 'Scrape and Send to Discord - Complete';
+            submitInput.style.backgroundColor = 'green';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
         } else {
-            responseDiv.classList.add('error')
+            responseDiv.classList.value = 'error';
+            submitInput.value = 'Scrape and Send to Discord - Error';
+            submitInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
         }
     }
+
+
     repostInput.onclick = async (e) => {
+
+        repostInput.value = 'Repost Everything - Submitting';
+        repostInput.style.backgroundColor = 'orange';
+        submitInput.disabled = true;
+        repostInput.disabled = true;
+        repostdelayInput.disabled = true;
+        
+        const passwordInput = document.getElementById('password')
+        const password = passwordInput.value ?? ''
+
         const linksResponse = await fetch('links.txt')
+
+        if(password.length === 0) {
+            responseDiv.innerHTML = '<p>Password Required</p>'
+            responseDiv.classList.value = 'error';
+            repostInput.value = 'Repost Everything - Error';
+            repostInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
+            return
+        } 
+        
         if(linksResponse.ok) {
-            const links = await linksResponse.text()
-            for(const link of links.split('\n')) {
+
+            responseDiv.innerHTML = '';
+            const linksText = await linksResponse.text();
+            const links = linksText.split('\n');
+            let totalLines = links.length; 
+            entryCheck = '';
+
+            for (const line of links) {
+                const [url, finished_date, book_rating] = line.split(',');
+
+                console.log(`URL: ${url}, date_finished: ${finished_date}, book_rating: ${book_rating}`);
+
                 const options = {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({audible_url: link, repost: '1'})
+                    body: new URLSearchParams({
+                        audible_url: url,
+                        finished_date: finished_date,
+                        book_rating: book_rating,
+                        repost: '1',
+                        password: password,
+                    })
                 }
                 const response = await fetch('post.php', options)
                 const json = await response.json()
-                responseDiv.innerHTML += '<p>'+(json?.message ?? `OK: ${link}`)+'</p>'
+
+                if(json?.message != "<p>Password Incorrect</p>" && entryCheck == ""){
+                    responseDiv.innerHTML += `<p>Reposting ${totalLines} Entries</p>`;
+                    entryCheck = 'true';
+                }
+
+                responseDiv.innerHTML += '<p>'+(json?.message ?? `OK: ${url} | Entry: ${totalLines}`)+'</p>'
+
+                if(responseDiv.innerHTML.includes("Password Incorrect")) {
+                    responseDiv.classList.value = 'error';
+                    repostInput.value = 'Repost Everything - Error';
+                    repostInput.style.backgroundColor = 'red';
+                    submitInput.disabled = false;
+                    repostInput.disabled = false;
+                    repostdelayInput.disabled = false;
+                    return
+                }else{
+                    responseDiv.classList.value = 'success';
+                }
             }
+            repostInput.value = 'Repost Everything - Complete';
+            repostInput.style.backgroundColor = 'green';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
         } else {
             responseDiv.innerHTML = 'No links found'
-            responseDiv.classList.add('error')
+            responseDiv.classList.value = 'error';
+            repostInput.value = 'Repost Everything - Error';
+            repostInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
         }
     }
+
+    repostdelayInput.onclick = async (e) => {
+
+        repostdelayInput.value = 'Repost Everything Throttled - Submitting';
+        repostdelayInput.style.backgroundColor = 'orange';
+        submitInput.disabled = true;
+        repostInput.disabled = true;
+        repostdelayInput.disabled = true;
+
+        const passwordInput = document.getElementById('password')
+        const password = passwordInput.value ?? ''
+
+        const linksResponse = await fetch('links.txt')
+
+        if(password.length === 0) {
+            responseDiv.innerHTML = '<p>Password Required</p>'
+            responseDiv.classList.value = 'error';
+            repostdelayInput.value = 'Repost Everything Throttled - Error';
+            repostdelayInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
+            return
+        } 
+
+        if(linksResponse.ok) {
+
+            responseDiv.innerHTML = '';
+            const linksText = await linksResponse.text();
+            const links = linksText.split('\n');
+            let totalLines = links.length; 
+            entryCheck = '';
+           
+            for (const line of links) {
+                const [url, finished_date, book_rating] = line.split(',');
+
+                console.log(`URL: ${url}, date_finished: ${finished_date}, book_rating: ${book_rating}`);
+
+                const options = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        audible_url: url,
+                        finished_date: finished_date,
+                        book_rating: book_rating,
+                        repost: '1',
+                        password: password,
+                    })
+                }
+                const response = await fetch('post.php', options)
+                const json = await response.json()
+
+                if(json?.message != "<p>Password Incorrect</p>" && entryCheck == ""){
+                    responseDiv.innerHTML += `<p>Reposting ${totalLines} Entries</p>`;
+                    entryCheck = 'true';
+                }
+
+                responseDiv.innerHTML += '<p>'+(json?.message ?? `OK: ${url} | Entry: ${totalLines}`)+'</p>'
+
+                if(responseDiv.innerHTML.includes("Password Incorrect")) {
+                    responseDiv.classList.value = 'error';
+                    repostdelayInput.value = 'Repost Everything Throttled - Error';
+                    repostdelayInput.style.backgroundColor = 'red';
+                    submitInput.disabled = false;
+                    repostInput.disabled = false;
+                    repostdelayInput.disabled = false;
+                    return
+                }else{
+                    responseDiv.classList.value = 'success';
+                    totalLines--; 
+                    if(totalLines != 0){
+                        await countdown(420);
+                    }
+                }          
+            }
+
+            function countdown(seconds) {
+                return new Promise(async (resolve) => {
+                    for (let i = seconds; i > 0; i--) {
+                        repostdelayInput.value = `Reposting Entry ${totalLines} in ${i} seconds`;
+                        await delay(1000); // 1-second delay
+                    }
+                    resolve();
+                });
+            }
+
+            function delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+                repostdelayInput.value = 'Repost Everything Throttled - Complete';
+                repostdelayInput.style.backgroundColor = 'green';
+                submitInput.disabled = false;
+                repostInput.disabled = false;
+                repostdelayInput.disabled = false;
+
+        } else {
+            responseDiv.innerHTML = 'No links found'
+            responseDiv.classList.value = 'error';
+            repostdelayInput.value = 'Repost Everything Throttled - Error';
+            repostdelayInput.style.backgroundColor = 'red';
+            submitInput.disabled = false;
+            repostInput.disabled = false;
+            repostdelayInput.disabled = false;
+        }
+    }
+
+    
 </script>
 </html>

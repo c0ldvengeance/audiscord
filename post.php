@@ -1,31 +1,66 @@
 <?php
 $response = '';
+$discord_webhook_url = '';
 header('Content-Type: application/json');
 
+//if (file_exists('config.php')) {
+//    include 'config.php';
+//}
+
+if (file_exists('config.local.php')) {
+    include 'config.local.php';
+} elseif (file_exists('config.php')) {
+    include 'config.php';
+}
+
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Load Discord webhook
-    $discord_webhook_url = file_exists('config.local.php')
-        ? include 'config.local.php'
-        : (file_exists('config.php')
-            ? include 'config.php'
-            : '');
-    if(empty($discord_webhook_url)) die(json_encode(['message'=>'Set your Discord webhook URL in config.php or config.local.php']));
+    if($_POST['password'] != $mypass){
 
-    // Get the Audible URL from the form
-    $audible_url = urldecode($_POST['audible_url'] ?? '');
-    $audible_url_arr = explode('?', $audible_url);
-    $audible_url = $audible_url_arr[0];
+        $response = '<p>Password Incorrect</p>';
+        die(json_encode(['message'=>$response]));
+       
+    }else{
+        // Load Discord webhook
+        if (empty($discord_webhook_url)) {
+            die(json_encode(['message' => 'Set your Discord webhook URL in config.php or config.local.php']));
+        }
+        
 
-    // Should we repost?
-    $repost = boolval($_POST['repost'] ?? false);
-    if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
-        die(json_encode(['message'=>"Invalid URL: $audible_url"]));
-    } else {
-        echo scrapeAndPost($audible_url, $discord_webhook_url, $repost);
+        // Get the Audible URL from the form
+        $audible_url = urldecode($_POST['audible_url'] ?? '');
+        $audible_url_arr = explode('?', $audible_url);
+        $audible_url = $audible_url_arr[0];
+
+        //Finished Date
+        if($_POST['finished_date'] == ""){
+            $finished_date = date('d/m/Y');
+        }else{
+            $input_date = $_POST['finished_date'];
+            $date_object = DateTime::createFromFormat('Y/m/d', $input_date);
+            $finished_date = $date_object->format('d/m/Y');
+            //$finished_date = date("d/m/Y", strtotime($_POST['finished_date']));
+        }
+        // endregion
+        
+        //Book Rating
+        if($_POST['book_rating'] == ""){
+            $book_rating = "?";
+        }else{
+            $book_rating = $_POST['book_rating'];
+        }
+
+        // Should we repost?
+        $repost = boolval($_POST['repost'] ?? false);
+        if (!filter_var($audible_url, FILTER_VALIDATE_URL)) {
+            die(json_encode(['message'=>"Invalid URL: $audible_url"]));
+        } else {
+            echo scrapeAndPost($audible_url, $finished_date, $book_rating, $discord_webhook_url, $repost);
+        }
     }
 }
 
-function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $isRepost) {
+function scrapeAndPost(string $audible_url, string $finished_date, string $book_rating, string $discord_webhook_url, bool $isRepost) {
     // region Get page
     $html = file_get_contents($audible_url);
     $htmlLine = str_replace("\n", '', $html);
@@ -38,7 +73,9 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     for($i = 0; $i < count($og_matches[0]); $i++) {
         $k = $og_matches[1][$i];
         $v = $og_matches[2][$i];
+        $og_items[$k] = $v;
         $og_items[$k] = html_entity_decode($v);
+
     }
     // endregion
 
@@ -98,17 +135,6 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
 
     $attachmentsItems = [];
     $attachmentsData = [];
-    if (filter_var($image_url,FILTER_VALIDATE_URL)) {
-        $attachment = attach_file($image_url, $boundary, 'files[0]', 'image.jpg', 'image/jpeg');
-        if(!empty($attachment)) {
-            $attachmentsData[] = $attachment;
-            $attachmentsItems[] = [
-                'id'=>0,
-                'description' => 'Cover image of the book',
-                'filename' => build_filename($book_title, "cover.jpg")
-            ];
-        }
-    }
 
     if (filter_var($sample_url, FILTER_VALIDATE_URL)) {
         $attachment = attach_file($sample_url, $boundary, 'files[1]', 'sample.mp3', 'audio/mpeg');
@@ -124,18 +150,28 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     // endregion
 
     // Prepare the data to be sent to Discord
-    $description_items = [
-        "> **Author**: $author",
-        "> **Narrated by**: $narrator",
-    ];
-    if(!empty($series)) $description_items[] = "> **Series**: $series";
-    if(!empty($runtime)) $description_items[] = "> **Length**: $runtime";
-    $description_items[] = "> **Link**: [Get the book](<$book_url>)";
-    if(!empty($description)) $description_items[] = "\n> **Description**: $description";
+
+    $description_items = [];
+    $description_items[] = "Book Finished: **$book_title**";
+    if(!empty($series)) $description_items[] = "Series: **$series**";
+    $description_items[] = "Author: **$author**";
+    $description_items[] = "Narrated by: **$narrator**";
+    if(!empty($runtime)) $description_items[] = "Length: **$runtime**";
+    $description_items[] = "Date Finished: **$finished_date**";
+    $description_items[] = "My Rating: **$book_rating out of 10**";
+    $description_items[] = "$book_url";
 
     $discord_data = [
         'content' => implode("\n", $description_items)."\n\n",
-        'thread_name' => !empty($series) ? "$series — $book_title" : $book_title
+            'embeds' => [
+                [
+                    'description' => "\n**Description**: $description",
+                    'image' => [
+                        'url' => $image_url,
+                    ], 
+                                      
+                ]
+            ]
     ];
     if(count($attachmentsItems) > 0) {
         $discord_data['attachments'] = $attachmentsItems;
@@ -152,7 +188,9 @@ function scrapeAndPost(string $audible_url, string $discord_webhook_url, bool $i
     curl_close($ch);
 
     if($response !== false && !$isRepost) {
-        file_put_contents('links.txt', $audible_url."\n", FILE_APPEND);
+        $dateTime = DateTime::createFromFormat('d/m/Y', $finished_date);
+        $formatted_date = $dateTime->format('Y/m/d');
+        file_put_contents('links.txt', $audible_url . ',' . $formatted_date . ',' . $book_rating . "\n", FILE_APPEND);
     }
     return $response;
 }

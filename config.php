@@ -1,2 +1,3 @@
 <?php
-return ''; // Paste your webhook into here
+$discord_webhook_url = ''; // // Paste your webhook into here
+$mypass = ''; // Paste your password into here
